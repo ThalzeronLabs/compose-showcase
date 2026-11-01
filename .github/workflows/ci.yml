@@ -17,15 +17,29 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: 21
 
       - uses: gradle/actions/setup-gradle@v4
 
-      - name: Unit tests
-        run: ./gradlew :app:testDebugUnitTest
+      # Runs every unit test (JVM + Robolectric) and compares the screens with docs/screenshots.
+      - name: Unit, Room and screenshot tests
+        run: ./gradlew :app:verifyRoborazziDebug
+
+      - name: Upload screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-diffs
+          path: app/build/outputs/roborazzi
 
       - name: Build the release APK (R8)
         run: ./gradlew :app:assembleRelease
+
+      - name: Report the APK size
+        run: |
+          apk=app/build/outputs/apk/release/app-release.apk
+          bytes=$(stat -c %s "$apk")
+          echo "Release APK: $bytes bytes ($(awk "BEGIN { printf \"%.2f\", $bytes / 1048576 }") MiB)" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:

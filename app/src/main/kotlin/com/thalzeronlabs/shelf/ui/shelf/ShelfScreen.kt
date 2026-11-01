@@ -49,6 +49,12 @@ fun ShelfScreen(viewModel: ShelfViewModel, sheets: SheetHostState) {
         }
     }
 
+    ShelfContent(state, onBookClick = { manage(it) })
+}
+
+/** The stateless shelf screen. Previews and screenshot tests use this. */
+@Composable
+fun ShelfContent(state: ShelfState, onBookClick: (Book) -> Unit) {
     if (!state.loading && state.total == 0) {
         Box(Modifier.fillMaxSize().padding(40.dp), contentAlignment = Alignment.Center) {
             Text(
@@ -71,7 +77,7 @@ fun ShelfScreen(viewModel: ShelfViewModel, sheets: SheetHostState) {
                 )
             }
             items(books, key = { it.id }) { book ->
-                BookRow(book, onClick = { manage(book) }) {
+                BookRow(book, onClick = { onBookClick(book) }) {
                     Badge(status.label, highlighted = status == ReadingStatus.READING)
                 }
             }

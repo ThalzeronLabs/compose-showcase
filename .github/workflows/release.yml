@@ -1,0 +1,106 @@
+name: Release
+
+# Builds, signs and attaches the release APK to a GitHub release for every v* tag.
+# It can also be started by hand with a tag name, in which case the tag is created on the current commit.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to release, e.g. v1.0.0 (created on the selected branch if it does not exist)
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Check the tag
+        run: |
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::'$TAG' is not a vX.Y.Z tag"; exit 1; }
+          name=$(sed -nE 's/^ *versionName = "([^"]+)".*/\1/p' app/build.gradle.kts)
+          [[ "v$name" == "$TAG" ]] || { echo "::error::versionName is $name but the tag is $TAG"; exit 1; }
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # A brand-new key for every run. It never leaves the runner and is never stored as a secret,
+      # so anyone can see exactly how the APK was signed. It is a demo key, not a Play upload key.
+      - name: Generate a throwaway demo signing key
+        run: |
+          pass=$(openssl rand -hex 24)
+          echo "::add-mask::$pass"
+          keytool -genkeypair -keystore "$RUNNER_TEMP/demo.jks" -storetype PKCS12 -alias shelf-demo \
+            -keyalg RSA -keysize 3072 -validity 3650 -storepass "$pass" -keypass "$pass" \
+            -dname "CN=Shelf demo key (not for production), O=Thalzeron Labs"
+          {
+            echo "SHELF_KEYSTORE=$RUNNER_TEMP/demo.jks"
+            echo "SHELF_KEYSTORE_PASSWORD=$pass"
+            echo "SHELF_KEY_ALIAS=shelf-demo"
+            echo "SHELF_KEY_PASSWORD=$pass"
+          } >> "$GITHUB_ENV"
+
+      - name: Test and build the release APK (R8)
+        run: ./gradlew :app:verifyRoborazziDebug :app:assembleRelease
+
+      - name: Verify the signature and write the release notes
+        run: |
+          apk="shelf-$TAG.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$apk"
+          apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
+          "$apksigner" verify --print-certs "$apk" > certs.txt
+          cat certs.txt
+          grep -q "Shelf demo key" certs.txt || { echo "::error::APK is not signed with the demo key"; exit 1; }
+          cert=$(sed -nE 's/.*certificate SHA-256 digest: ([0-9a-f]+).*/\1/p' certs.txt | head -1)
+          bytes=$(stat -c %s "$apk")
+          mib=$(awk "BEGIN { printf \"%.2f\", $bytes / 1048576 }")
+          sha=$(sha256sum "$apk" | cut -d' ' -f1)
+          version="${TAG#v}"
+          changes=$(awk -v v="$version" '$0 ~ "^## \\[" v "\\]" { on = 1; next } /^## \[/ { on = 0 } on && !/^\[[^]]+\]: /' CHANGELOG.md)
+          cat > notes.md <<NOTES
+          ${changes:-See CHANGELOG.md.}
+
+          ### The APK
+
+          | | |
+          |---|---|
+          | File | \`$apk\` |
+          | Size | $bytes bytes ($mib MiB), minified and shrunk with R8 |
+          | SHA-256 | \`$sha\` |
+          | Signing certificate SHA-256 | \`$cert\` |
+
+          **Signed with a demo key.** The key was generated inside this workflow run, used once and thrown away
+          (see \`.github/workflows/release.yml\`). It proves the APK is a normal signed release build, but it is
+          not a production or Play Store key, and every release has a different one: to install a newer
+          version over an older one, uninstall the old one first.
+
+          Install: download the APK on an Android 8.0+ device and allow installs from your browser or file manager.
+          NOTES
+          echo "APK=$apk" >> "$GITHUB_ENV"
+
+      - name: Publish the GitHub release
+        run: |
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            gh release upload "$TAG" "$APK" --clobber
+            gh release edit "$TAG" --notes-file notes.md
+          else
+            gh release create "$TAG" "$APK" --title "Shelf $TAG" --notes-file notes.md --target "$GITHUB_SHA" --latest
+          fi

@@ -13,7 +13,7 @@ class ShelfRepositoryTest {
     private val api = FakeApi()
     private val dao = FakeDao()
     private var now = 1_000L
-    private val repo = DefaultShelfRepository(api, dao) { now++ }
+    private val repo = DefaultShelfRepository(api, dao, FakeSearchCacheDao()) { now++ }
 
     @Test
     fun `search maps the API into clean books`() = runTest {
@@ -22,7 +22,7 @@ class ShelfRepositoryTest {
             DocDto("/works/OL2W", null),
             DocDto("/works/OL3W", "No author"),
         )
-        val books = repo.search("  dune ")
+        val books = repo.search("  dune ").books
 
         assertEquals("dune", api.queries.single())
         assertEquals(2, books.size) // the one without a title is dropped
