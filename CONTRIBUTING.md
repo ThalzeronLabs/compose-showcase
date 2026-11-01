@@ -10,7 +10,7 @@ point at the files involved and say when they are done. Comment on one to claim 
 
 ## Setup
 
-You need JDK 17+ and the Android SDK (Android Studio installs both). No API key is needed: the app uses the public
+You need JDK 21 (Robolectric needs it to run the tests on the Android 16 runtime) and the Android SDK; Android Studio bundles both. No API key is needed: the app uses the public
 Open Library API.
 
 ```bash

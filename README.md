@@ -156,7 +156,7 @@ cd compose-showcase
 ./gradlew :app:installDebug
 ```
 
-Requires JDK 17+ and the Android SDK. Local release builds are signed with the debug key so they install anywhere.
+Requires JDK 21 (Robolectric needs it for the Android 16 runtime used by the tests) and the Android SDK. Local release builds are signed with the debug key so they install anywhere.
 
 ## Releases
 
