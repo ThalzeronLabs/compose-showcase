@@ -56,7 +56,7 @@ class AppViewModel @Inject constructor(private val settings: SettingsStore) : Vi
     }
 }
 
-private enum class Tab(val route: String, val label: String) { SEARCH("search", "Search"), SHELF("shelf", "My shelf") }
+enum class Tab(val route: String, val label: String) { SEARCH("search", "Search"), SHELF("shelf", "My shelf") }
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -79,31 +79,51 @@ private fun ShelfRoot(onTheme: (ThemeMode) -> Unit) {
     val scope = rememberCoroutineScope()
     val current = nav.currentBackStackEntryAsState().value?.destination?.route
 
+    ShelfScaffold(
+        selected = Tab.entries.firstOrNull { it.route == current } ?: Tab.SEARCH,
+        onSelect = { tab ->
+            nav.navigate(tab.route) {
+                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+                restoreState = true
+            }
+        },
+        onThemeClick = {
+            scope.launch {
+                sheets.choose("Appearance", ThemeMode.entries.map { SheetOption(it.label, it) })?.let(onTheme)
+            }
+        },
+    ) {
+        NavHost(nav, startDestination = Tab.SEARCH.route) {
+            composable(Tab.SEARCH.route) { SearchScreen(hiltViewModel(), sheets) }
+            composable(Tab.SHELF.route) { ShelfScreen(hiltViewModel(), sheets) }
+        }
+    }
+    SheetHost(sheets)
+}
+
+/** The app chrome (top bar, bottom navigation) around a tab's content. Stateless, so screenshot tests can render it. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ShelfScaffold(
+    selected: Tab,
+    onSelect: (Tab) -> Unit,
+    onThemeClick: () -> Unit,
+    content: @Composable () -> Unit,
+) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Shelf", fontWeight = FontWeight.Bold) },
-                actions = {
-                    TextButton(onClick = {
-                        scope.launch {
-                            sheets.choose("Appearance", ThemeMode.entries.map { SheetOption(it.label, it) })?.let(onTheme)
-                        }
-                    }) { Text("Theme") }
-                },
+                actions = { TextButton(onClick = onThemeClick) { Text("Theme") } },
             )
         },
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
                 Tab.entries.forEach { tab ->
                     NavigationBarItem(
-                        selected = current == tab.route,
-                        onClick = {
-                            nav.navigate(tab.route) {
-                                popUpTo(nav.graph.findStartDestination().id) { saveState = true }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
+                        selected = tab == selected,
+                        onClick = { onSelect(tab) },
                         icon = { Text(if (tab == Tab.SEARCH) "⌕" else "▤", style = MaterialTheme.typography.titleLarge) },
                         label = { Text(tab.label) },
                     )
@@ -111,12 +131,6 @@ private fun ShelfRoot(onTheme: (ThemeMode) -> Unit) {
             }
         },
     ) { padding ->
-        Column(Modifier.padding(padding)) {
-            NavHost(nav, startDestination = Tab.SEARCH.route) {
-                composable(Tab.SEARCH.route) { SearchScreen(hiltViewModel(), sheets) }
-                composable(Tab.SHELF.route) { ShelfScreen(hiltViewModel(), sheets) }
-            }
-        }
+        Column(Modifier.padding(padding)) { content() }
     }
-    SheetHost(sheets)
 }

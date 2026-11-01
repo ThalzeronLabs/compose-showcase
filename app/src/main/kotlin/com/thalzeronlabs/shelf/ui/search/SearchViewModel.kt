@@ -26,7 +26,8 @@ import javax.inject.Inject
 sealed interface SearchState {
     data object Idle : SearchState
     data object Loading : SearchState
-    data class Results(val books: List<Book>) : SearchState
+    /** [savedAt] is set when the network failed and these are the results cached on the device. */
+    data class Results(val books: List<Book>, val savedAt: Long? = null) : SearchState
     data class Empty(val query: String) : SearchState
     data class Error(val message: String) : SearchState
 }
@@ -50,7 +51,7 @@ class SearchViewModel @Inject constructor(private val repository: ShelfRepositor
                     emit(SearchState.Loading)
                     emit(
                         runCatching { repository.search(q) }.fold(
-                            onSuccess = { if (it.isEmpty()) SearchState.Empty(q) else SearchState.Results(it) },
+                            onSuccess = { if (it.books.isEmpty()) SearchState.Empty(q) else SearchState.Results(it.books, it.cachedAt) },
                             onFailure = { SearchState.Error("Couldn't reach Open Library. Check your connection.") },
                         )
                     )
@@ -62,7 +63,7 @@ class SearchViewModel @Inject constructor(private val repository: ShelfRepositor
     val state: StateFlow<SearchState> = combine(remote, repository.shelf()) { result, shelf ->
         if (result !is SearchState.Results) return@combine result
         val saved = shelf.associate { it.id to it.status }
-        SearchState.Results(result.books.map { it.copy(status = saved[it.id]) })
+        result.copy(books = result.books.map { it.copy(status = saved[it.id]) })
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SearchState.Idle)
 
     fun onQueryChange(value: String) {

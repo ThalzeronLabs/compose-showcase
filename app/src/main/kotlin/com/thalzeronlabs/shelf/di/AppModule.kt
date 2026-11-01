@@ -10,6 +10,7 @@ import com.squareup.moshi.Moshi
 import com.thalzeronlabs.shelf.data.DefaultShelfRepository
 import com.thalzeronlabs.shelf.data.ShelfRepository
 import com.thalzeronlabs.shelf.data.local.BookDao
+import com.thalzeronlabs.shelf.data.local.SearchCacheDao
 import com.thalzeronlabs.shelf.data.local.ShelfDatabase
 import com.thalzeronlabs.shelf.data.remote.OpenLibraryApi
 import dagger.Module
@@ -43,16 +44,19 @@ object AppModule {
 
     @Provides @Singleton
     fun database(@ApplicationContext context: Context): ShelfDatabase =
-        Room.databaseBuilder(context, ShelfDatabase::class.java, "shelf.db").build()
+        Room.databaseBuilder(context, ShelfDatabase::class.java, ShelfDatabase.NAME).build()
 
     @Provides
     fun bookDao(db: ShelfDatabase): BookDao = db.books()
+
+    @Provides
+    fun searchCacheDao(db: ShelfDatabase): SearchCacheDao = db.searchCache()
 
     @Provides @Singleton
     fun dataStore(@ApplicationContext context: Context): DataStore<Preferences> =
         PreferenceDataStoreFactory.create { context.preferencesDataStoreFile("settings") }
 
     @Provides @Singleton
-    fun repository(api: OpenLibraryApi, dao: BookDao): ShelfRepository =
-        DefaultShelfRepository(api, dao, System::currentTimeMillis)
+    fun repository(api: OpenLibraryApi, dao: BookDao, cache: SearchCacheDao): ShelfRepository =
+        DefaultShelfRepository(api, dao, cache, System::currentTimeMillis)
 }
