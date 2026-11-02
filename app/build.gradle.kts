@@ -15,8 +15,8 @@ android {
         applicationId = "com.thalzeronlabs.shelf"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.1.1"
     }
 
     // The release workflow generates a throwaway demo key and passes it in through these variables.
