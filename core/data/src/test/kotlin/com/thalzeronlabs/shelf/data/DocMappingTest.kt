@@ -15,7 +15,8 @@ class DocMappingTest {
         assertEquals("OL1W", dune.id)
         assertEquals("Dune", dune.title)
         assertEquals("Frank Herbert, Someone", dune.authors)
-        assertEquals("Frank Herbert, Someone · 1965", dune.byline)
+        assertEquals("Frank Herbert, Someone\u00A0· 1965", dune.byline)
+        assertEquals("Frank Herbert, Someone, 1965", dune.spokenByline)
         assertEquals("https://covers.openlibrary.org/b/id/42-M.jpg", dune.coverUrl)
 
         val bare = DocDto("/works/OL3W", "No author").toBook()!!

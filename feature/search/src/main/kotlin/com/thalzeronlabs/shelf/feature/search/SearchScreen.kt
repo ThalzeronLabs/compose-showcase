@@ -28,6 +28,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -95,10 +100,16 @@ fun SearchContent(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (status) {
                 SearchStatus.Idle -> Hint("Search millions of books by title or author.")
-                SearchStatus.Loading -> CircularProgressIndicator(Modifier.align(Alignment.Center))
-                is SearchStatus.Empty -> Hint("Nothing found for \"${status.query}\".")
+                SearchStatus.Loading -> CircularProgressIndicator(
+                    Modifier.align(Alignment.Center).semantics { contentDescription = "Searching" },
+                )
+                is SearchStatus.Empty -> Hint("Nothing found for \"${status.query}\".", announce = true)
                 is SearchStatus.Error -> Column(
-                    Modifier.align(Alignment.Center).padding(32.dp),
+                    // Announced when it appears, so a screen reader user knows the search failed.
+                    Modifier
+                        .align(Alignment.Center)
+                        .padding(32.dp)
+                        .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Text(status.message, textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -107,7 +118,10 @@ fun SearchContent(
                 is SearchStatus.Results -> Column {
                     when {
                         status.refreshFailed -> SavedResultsBanner(onRetry)
-                        status.refreshing -> LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = 16.dp))
+                        status.refreshing -> LinearProgressIndicator(
+                            Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                                .semantics { contentDescription = "Refreshing results" },
+                        )
                     }
                     ResultList(items, onBookClick, onRetry)
                 }
@@ -130,15 +144,30 @@ private fun ResultList(items: LazyPagingItems<Book>, onBookClick: (Book) -> Unit
             contentType = items.itemContentType { "book" },
         ) { index ->
             val book = items[index] ?: return@items
-            BookRow(book.title, book.byline, book.coverUrl, onClick = { onBookClick(book) }) {
-                Badge(book.status?.label ?: "+ Add", highlighted = book.status == null)
+            BookRow(
+                book.title,
+                book.byline,
+                book.coverUrl,
+                onClick = { onBookClick(book) },
+                onClickLabel = if (book.status == null) "add to your shelf" else "change its list",
+                stateDescription = book.status?.label ?: "Not on your shelf",
+                subtitleDescription = book.spokenByline,
+            ) {
+                // The row's state already says this; the reader would otherwise read "plus Add".
+                Badge(
+                    book.status?.label ?: "+ Add",
+                    highlighted = book.status == null,
+                    modifier = Modifier.clearAndSetSemantics {},
+                )
             }
         }
         // The next page: a spinner while it loads, a retry if the connection dropped on the way.
         when (items.loadState.append) {
             is LoadState.Loading -> item(contentType = "footer") {
                 Box(Modifier.fillMaxWidth().padding(8.dp), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(Modifier.size(28.dp))
+                    CircularProgressIndicator(
+                        Modifier.size(28.dp).semantics { contentDescription = "Loading more results" },
+                    )
                 }
             }
             is LoadState.Error -> item(contentType = "footer") { LoadMoreError(onRetry) }
@@ -150,7 +179,10 @@ private fun ResultList(items: LazyPagingItems<Book>, onBookClick: (Book) -> Unit
 @Composable
 private fun LoadMoreError(onRetry: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 8.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
@@ -172,6 +204,7 @@ private fun SavedResultsBanner(onRetry: () -> Unit) {
             .padding(start = 16.dp, end = 16.dp, top = 4.dp)
             .clip(RoundedCornerShape(14.dp))
             .background(MaterialTheme.colorScheme.primaryContainer)
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite }
             .padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -195,6 +228,8 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = Modifier
             .testTag(SearchTags.FIELD)
+            // The placeholder is drawn, not announced: this is what a screen reader calls the field.
+            .semantics { contentDescription = "Search books" }
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .clip(RoundedCornerShape(50))
@@ -208,8 +243,14 @@ private fun SearchField(value: String, onValueChange: (String) -> Unit) {
 }
 
 @Composable
-private fun Hint(text: String) {
-    Column(Modifier.fillMaxSize().padding(40.dp), verticalArrangement = Arrangement.Center) {
+private fun Hint(text: String, announce: Boolean = false) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(40.dp)
+            .semantics(mergeDescendants = announce) { if (announce) liveRegion = LiveRegionMode.Polite },
+        verticalArrangement = Arrangement.Center,
+    ) {
         Text(text, Modifier.fillMaxWidth(), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Spacer(Modifier.height(40.dp))
     }

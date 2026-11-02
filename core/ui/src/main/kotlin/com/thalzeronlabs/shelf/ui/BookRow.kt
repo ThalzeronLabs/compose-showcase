@@ -19,14 +19,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import coil3.compose.AsyncImage
 
 /**
  * One book: cover, title and a subtitle (author and year), plus a trailing slot for an action or a status badge.
  * It takes plain values rather than a model class, so the design system does not depend on the data layer.
+ *
+ * For screen readers the row is one item that reads "title, [subtitleDescription], [stateDescription]" and
+ * announces its action as "double tap to [onClickLabel]". [subtitleDescription] is the subtitle as it should be
+ * spoken; it is set on the whole row, because a description on the subtitle alone would replace the title in
+ * what the reader says. The cover is decorative (the title follows it), and whatever [trailing] shows should be
+ * described by [stateDescription] and hidden from the reader.
  */
 @Composable
 fun BookRow(
@@ -35,14 +46,24 @@ fun BookRow(
     coverUrl: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    onClickLabel: String? = null,
+    stateDescription: String? = null,
+    subtitleDescription: String? = null,
     trailing: @Composable () -> Unit = {},
 ) {
+    // With a large system font size there is no room for the badge beside the text: it moves below it, and the
+    // title and byline get the full width (and more lines) instead of breaking mid-word.
+    val largeFont = LocalDensity.current.fontScale >= LARGE_FONT_SCALE
     Row(
         modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .clickable(onClick = onClick)
+            .clickable(onClickLabel = onClickLabel, onClick = onClick)
+            .semantics {
+                subtitleDescription?.let { contentDescription = "$title, $it" }
+                stateDescription?.let { this.stateDescription = it }
+            }
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -56,12 +77,17 @@ fun BookRow(
             if (coverUrl != null) {
                 AsyncImage(
                     model = coverUrl,
-                    contentDescription = "Cover of $title",
+                    contentDescription = null,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.size(width = 54.dp, height = 80.dp),
                 )
             } else {
-                Text(title.take(1), style = MaterialTheme.typography.titleLarge, color = MaterialTheme.colorScheme.primary)
+                Text(
+                    title.take(1),
+                    Modifier.clearAndSetSemantics {},
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
             }
         }
         Spacer(Modifier.width(14.dp))
@@ -70,7 +96,7 @@ fun BookRow(
                 title,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                maxLines = 2,
+                maxLines = if (largeFont) 4 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Spacer(Modifier.height(2.dp))
@@ -78,19 +104,29 @@ fun BookRow(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
+                // Room to wrap, so a large font size moves the year to the next line instead of cutting it off.
+                maxLines = if (largeFont) 3 else 2,
                 overflow = TextOverflow.Ellipsis,
             )
+            if (largeFont) {
+                Spacer(Modifier.height(8.dp))
+                trailing()
+            }
         }
-        Spacer(Modifier.width(8.dp))
-        trailing()
+        if (!largeFont) {
+            Spacer(Modifier.width(8.dp))
+            trailing()
+        }
     }
 }
 
+/** From this system font scale up (150 %), [BookRow] stacks its badge under the text. */
+const val LARGE_FONT_SCALE = 1.5f
+
 @Composable
-fun Badge(text: String, highlighted: Boolean) {
+fun Badge(text: String, highlighted: Boolean, modifier: Modifier = Modifier) {
     Box(
-        Modifier
+        modifier
             .clip(RoundedCornerShape(50))
             .background(if (highlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(horizontal = 12.dp, vertical = 6.dp),

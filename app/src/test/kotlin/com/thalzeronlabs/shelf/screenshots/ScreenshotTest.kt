@@ -5,7 +5,9 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalInspectionMode
+import androidx.compose.ui.unit.Density
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import coil3.asImage
 import coil3.compose.AsyncImagePreviewHandler
@@ -59,6 +61,15 @@ class ScreenshotTest {
         search(SearchStatus.Results(), results = searchResults.take(5), append = LoadState.Error(IOException("offline")))
     }
 
+    /** The system font at 200 %: from 150 % the badge moves under the text, which keeps its full width. */
+    @Test fun searchLargeFontDark() = snap("search_font200_dark", dark = true, Tab.SEARCH, fontScale = 2f) {
+        search(SearchStatus.Results())
+    }
+
+    @Test fun shelfLargeFontDark() = snap("shelf_font200_dark", dark = true, Tab.SHELF, fontScale = 2f) {
+        ShelfContent(shelfState, onBookClick = {})
+    }
+
     @Test fun searchLight() = snap("search_light", dark = false, Tab.SEARCH) { search(SearchStatus.Results()) }
 
     @Test fun shelfLight() = snap("shelf_light", dark = false, Tab.SHELF) { ShelfContent(shelfState, onBookClick = {}) }
@@ -86,18 +97,25 @@ class ScreenshotTest {
         SearchContent(query, status, items, onQueryChange = {}, onRetry = {}, onBookClick = {})
     }
 
-    private fun snap(name: String, dark: Boolean, tab: Tab, offline: Boolean = false, content: @Composable () -> Unit) =
-        captureRoboImage("$DIR/$name.png", OPTIONS) {
-            // Inspection mode makes Coil use the preview handler below instead of the network.
-            CompositionLocalProvider(
-                LocalInspectionMode provides true,
-                LocalAsyncImagePreviewHandler provides covers,
-            ) {
-                ShelfTheme(dark) {
-                    ShelfScaffold(selected = tab, offline = offline, onSelect = {}, onThemeClick = {}, content = content)
-                }
+    private fun snap(
+        name: String,
+        dark: Boolean,
+        tab: Tab,
+        offline: Boolean = false,
+        fontScale: Float = 1f,
+        content: @Composable () -> Unit,
+    ) = captureRoboImage("$DIR/$name.png", OPTIONS) {
+        // Inspection mode makes Coil use the preview handler below instead of the network.
+        CompositionLocalProvider(
+            LocalInspectionMode provides true,
+            LocalAsyncImagePreviewHandler provides covers,
+            LocalDensity provides Density(LocalDensity.current.density, fontScale),
+        ) {
+            ShelfTheme(dark) {
+                ShelfScaffold(selected = tab, offline = offline, onSelect = {}, onThemeClick = {}, content = content)
             }
         }
+    }
 
     private companion object {
         /** Relative to the app module, which is where Gradle runs unit tests. */
