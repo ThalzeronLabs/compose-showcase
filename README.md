@@ -208,11 +208,23 @@ compare medians, not single runs. To regenerate the profile after changing the s
 The [Baseline profile workflow](.github/workflows/baseline-profile.yml) runs both on a Pixel 6 (API 34) emulator on
 GitHub Actions and writes the table to its job summary.
 
-Results from that workflow are added here once it has run; no number is quoted that CI has not measured.
+**What CI measured.** [This run](https://github.com/ThalzeronLabs/compose-showcase/actions/runs/41407100256)
+(2026-11-02, "Android SDK built for x86_64" emulator, API 34, 10 cold starts per mode) produced the committed profile
+and these `timeToInitialDisplayMs` values:
+
+| Mode | Min | Median | Max |
+|---|---:|---:|---:|
+| Without the profile (`CompilationMode.None`) | 821.8 ms | 862.3 ms | 947.0 ms |
+| With the profile (`Partial`, `BaselineProfileMode.Require`) | 750.9 ms | 889.9 ms | 1,238.9 ms |
+
+On that emulator the two medians are within each other's spread, so this run shows **no measurable start-up gain**
+and I do not claim one. A software-rendered x86_64 emulator on a shared CI machine is a poor stand-in for a phone; the
+numbers that matter come from the command above on a real device, and none are published here until they have been
+measured.
 
 ## APK size
 
-The release APK is minified and resource-shrunk with R8. Measured locally on 2026-11-01 from the v1.0.0 source, signed
+The release APK is minified and resource-shrunk with R8. Measured locally on 2026-11-01 from the **v1.0.0** source, signed
 with the debug key (same machine, only `isMinifyEnabled`/`isShrinkResources` changed between the two builds):
 
 | Release APK | Size |
@@ -221,7 +233,8 @@ with the debug key (same machine, only `isMinifyEnabled`/`isShrinkResources` cha
 | Without R8 | 10,355,516 bytes (9.88 MiB) |
 
 R8 removes about 82% of the APK. `apkanalyzer` estimates the compressed download at 1,619,217 bytes. Every CI run
-prints the current size in its job summary, and each GitHub release lists the size and SHA-256 of its APK.
+prints the current size in its job summary, and each GitHub release (1.1.0 included) lists the size and SHA-256 of
+its APK.
 
 Measure it yourself:
 
