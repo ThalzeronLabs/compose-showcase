@@ -7,11 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Added
 
+- **Accessibility.** Each book is one item for a screen reader, with its state ("Reading", "Not on your shelf") and
+  what a tap does; the cover is no longer read and the badge is not read twice. Shelf sections are headings, the
+  search field is labelled, and the Offline indicator, errors and the saved-results banner are announced. From a
+  150% system font size the badge moves under the text, so titles, authors and years are no longer cut off.
+- Accessibility tests with Google's Accessibility Test Framework (labels, touch targets, contrast) on both screens
+  and their bottom sheets, plus checks of what a screen reader hears; screenshots at a 200% font size.
 - Compose interaction tests for both screens, run under Robolectric with the real ViewModels, Paging and bottom
   sheets: searching and adding a book through the sheet, the empty, error and offline states, and moving and
   removing books (including cancelling a removal).
 - Tests for `SettingsStore` against a real DataStore file: the default, a choice surviving a restart, and an unknown
   stored value falling back to the system theme.
+
+### Fixed
+
+- Secondary text in the light theme (authors, years, hints) had a contrast of 4.47:1, below WCAG AA; it is now
+  at least 5.3:1.
 
 ## [1.1.1] - 2026-11-02
 

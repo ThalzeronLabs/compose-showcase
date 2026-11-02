@@ -26,6 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.text.font.FontWeight
@@ -53,7 +56,7 @@ fun ShelfScaffold(
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Shelf", fontWeight = FontWeight.Bold)
+                        Text("Shelf", Modifier.semantics { heading() }, fontWeight = FontWeight.Bold)
                         AnimatedVisibility(offline, enter = fadeIn(), exit = fadeOut()) {
                             OfflineIndicator(Modifier.padding(start = 12.dp))
                         }
@@ -86,7 +89,9 @@ fun OfflineIndicator(modifier: Modifier = Modifier) {
         modifier
             .clip(RoundedCornerShape(50))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+            // Announced as it appears, not only shown: the dot alone means nothing to a screen reader user.
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(MaterialTheme.colorScheme.error))

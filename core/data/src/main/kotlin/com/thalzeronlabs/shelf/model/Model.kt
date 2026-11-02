@@ -16,8 +16,14 @@ data class Book(
     val coverUrl: String?,
     val status: ReadingStatus? = null,
 ) {
-    /** "Author · year", as the lists show it under the title. */
-    val byline: String get() = listOfNotNull(authors, year?.toString()).joinToString(" · ")
+    /**
+     * "Author · year", as the lists show it under the title. The dot is held to the author by a no-break space,
+     * so a large font size wraps before the year, never leaving the dot at the start of a line.
+     */
+    val byline: String get() = listOfNotNull(authors, year?.toString()).joinToString("\u00A0· ")
+
+    /** The byline as a screen reader should say it: a pause instead of the middle dot. */
+    val spokenByline: String get() = listOfNotNull(authors, year?.toString()).joinToString(", ")
 }
 
 enum class ThemeMode(val label: String) { SYSTEM("Follow the system"), LIGHT("Light"), DARK("Dark") }

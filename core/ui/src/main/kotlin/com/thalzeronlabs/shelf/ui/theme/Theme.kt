@@ -37,7 +37,8 @@ private val Light = lightColorScheme(
     surfaceContainer = Color(0xFFEDEDF0),
     surfaceContainerHigh = Color(0xFFE5E5EA),
     surfaceContainerLow = Color(0xFFF2F2F5),
-    onSurfaceVariant = Color(0xFF6C6C70),
+    // 5.3:1 or more on every light surface (WCAG AA asks 4.5:1 for small text); 0xFF6C6C70 was 4.47:1.
+    onSurfaceVariant = Color(0xFF5C5C61),
 )
 
 /** The app theme. The caller decides light or dark (from the user's setting or the system). */

@@ -28,6 +28,15 @@ catalogue in the background.
 
 </details>
 
+<details>
+<summary>System font at 200%</summary>
+
+| Search | My shelf |
+|:---:|:---:|
+| <img src="docs/screenshots/search_font200_dark.png" width="260" alt="Search results at 200% font size: titles, authors and years in full, badges under the text"> | <img src="docs/screenshots/shelf_font200_dark.png" width="260" alt="The shelf at 200% font size, nothing cut off"> |
+
+</details>
+
 These images are not mock-ups: they are rendered from the real composables by the
 [screenshot tests](app/src/test/kotlin/com/thalzeronlabs/shelf/screenshots/ScreenshotTest.kt) on the JVM, and CI fails
 if the UI drifts from them. (The book covers are generated placeholders, so no cover art lives in the repository.)
@@ -125,6 +134,12 @@ classes, so the design system can change without touching the data layer and vic
 - **Schema changes are migrations, never wipes.** The Room schema is exported to
   [`core/data/schemas`](core/data/schemas). Version 2 added the search cache and version 3 the paging keys and the
   sync stamp, both with `AutoMigration`; tests prove a version-1 shelf survives the upgrade to 3.
+- **Accessible by design, and tested for it.** Each book is one item for a screen reader, read as "Dune, Frank
+  Herbert, 1965, Not on your shelf, double tap to add to your shelf": the cover is decorative, the badge is spoken as
+  the row's state and the tap says what it does. Shelf sections are headings, the search field has a label, and the
+  Offline indicator, errors and the saved-results banner are announced as they appear. From a 150% system font size
+  the badge moves under the text, so nothing is cut off at 200%. Secondary text is at least 5.3:1 against its
+  background in both themes (WCAG AA asks 4.5:1).
 - **Release builds are minified with R8** and still work: Moshi uses generated adapters, Room and Hilt use KSP, so
   there is no reflection for R8 to break and no keep rules to maintain.
 
@@ -151,6 +166,7 @@ classes, so the design system can change without touching the data layer and vic
 | **work-testing** | Runs workers directly with chosen attempt counts, and a test WorkManager whose constraints the test can switch on, so retry and scheduling logic is tested on the JVM. |
 | **Robolectric** | Runs real Android code (Room's SQLite, WorkManager, `ConnectivityManager`, Compose rendering) on the JVM, so no test needs an emulator. |
 | **Roborazzi** | Screenshot testing on top of Robolectric: records images to `docs/screenshots` and verifies them in CI. |
+| **Accessibility Test Framework (via `roborazzi-accessibility-check`)** | Google's accessibility checks (labels, 48 dp touch targets, text contrast) on the real screens and bottom sheets, under Robolectric. Compose's own `enableAccessibilityChecks()` does not run under Robolectric (a deliberately bad screen passes it), which is why this one is used. |
 | **room-testing** | `MigrationTestHelper` builds a database from an old exported schema and validates the migrated one. |
 
 ## Tests
@@ -161,7 +177,7 @@ classes, so the design system can change without touching the data layer and vic
 ./gradlew :app:recordRoborazziDebug                        # re-record the screenshots after a deliberate UI change
 ```
 
-75 tests, all on the JVM; no emulator or device is needed.
+84 tests, all on the JVM; no emulator or device is needed.
 
 | Suite | Runs on | What it proves |
 |---|---|---|
@@ -175,14 +191,19 @@ classes, so the design system can change without touching the data layer and vic
 | [`SearchViewModelTest`](feature/search/src/test/kotlin/com/thalzeronlabs/shelf/feature/search/SearchViewModelTest.kt) (7) | JVM, Turbine, paging-testing | Debounce collapses typing into one search; short queries never search; queries are trimmed; a new query cancels the previous pager; results and clearing; saving |
 | [`SearchStatusTest`](feature/search/src/test/kotlin/com/thalzeronlabs/shelf/feature/search/SearchStatusTest.kt) (8) | JVM | How Room's and the network's load states become idle, loading, empty, error, results, "refreshing" and "saved on this device" |
 | [`ShelfViewModelTest`](feature/shelf/src/test/kotlin/com/thalzeronlabs/shelf/feature/shelf/ShelfViewModelTest.kt) (2) | JVM, Turbine | Shelf grouping, moving and removing |
-| [`SearchScreenTest`](feature/search/src/test/kotlin/com/thalzeronlabs/shelf/feature/search/SearchScreenTest.kt) (5) | Robolectric, Compose UI test | Driving the real screen, ViewModel, Paging and bottom sheet: one-letter queries keep the hint; typing shows the results with their badges, and picking a list in the sheet saves the book; the empty state; offline with nothing saved shows the error and "Try again"; offline with saved rows shows them under the banner |
-| [`ShelfScreenTest`](feature/shelf/src/test/kotlin/com/thalzeronlabs/shelf/feature/shelf/ShelfScreenTest.kt) (4) | Robolectric, Compose UI test | Tapping through the sheets: moving a book (the sheet never offers its current list); removing asks first, "Cancel" keeps the book and "Remove" empties the shelf |
+| [`SearchScreenTest`](feature/search/src/test/kotlin/com/thalzeronlabs/shelf/feature/search/SearchScreenTest.kt) (9) | Robolectric, Compose UI test, ATF | Driving the real screen, ViewModel, Paging and bottom sheet: one-letter queries keep the hint; typing shows the results with their badges, and picking a list in the sheet saves the book; the empty state; offline with nothing saved shows the error and "Try again"; offline with saved rows shows them under the banner. **Accessibility:** results, banner, error and the sheet pass Google's checks; each result is heard as one item with its state and action; the error and banner are announced |
+| [`ShelfScreenTest`](feature/shelf/src/test/kotlin/com/thalzeronlabs/shelf/feature/shelf/ShelfScreenTest.kt) (7) | Robolectric, Compose UI test, ATF | Tapping through the sheets: moving a book (the sheet never offers its current list); removing asks first, "Cancel" keeps the book and "Remove" empties the shelf. **Accessibility:** the shelf, the empty shelf and both sheets pass Google's checks; sections are headings ("Want to read, 2 books"); each book is heard with its state and action |
 | [`SettingsStoreTest`](core/data/src/test/kotlin/com/thalzeronlabs/shelf/data/SettingsStoreTest.kt) (3) | JVM, real DataStore file | The theme follows the system by default; a choice survives a restart; a value this version does not know falls back to the system theme instead of crashing |
-| [`OfflineIndicatorTest`](app/src/test/kotlin/com/thalzeronlabs/shelf/OfflineIndicatorTest.kt) (1) | Robolectric, Compose UI test | The Offline indicator appears and disappears with connectivity |
-| [`ScreenshotTest`](app/src/test/kotlin/com/thalzeronlabs/shelf/screenshots/ScreenshotTest.kt) (7) | Robolectric + Roborazzi | Search, shelf, offline, error and "couldn't load more" screens in dark and light themes match `docs/screenshots` |
+| [`OfflineIndicatorTest`](app/src/test/kotlin/com/thalzeronlabs/shelf/OfflineIndicatorTest.kt) (1) | Robolectric, Compose UI test | The app title is a heading; the Offline indicator appears, is announced, and disappears with connectivity |
+| [`ScreenshotTest`](app/src/test/kotlin/com/thalzeronlabs/shelf/screenshots/ScreenshotTest.kt) (9) | Robolectric + Roborazzi | Search, shelf, offline, error and "couldn't load more" screens in dark and light themes, and search and shelf at a 200% font size, match `docs/screenshots` |
 
-The interaction tests were checked against deliberate bugs: removing a book without asking, and reading an unknown
-theme value without a fallback, each make them fail.
+The interaction and accessibility tests were checked against deliberate bugs, and each made the right test fail:
+removing a book without asking; reading an unknown theme value without a fallback; the old light-theme grey
+(4.47:1); a shelf section that is not a heading; a result with no tap label; and a badge read aloud as "+ Add".
+
+The one accessibility finding left is suppressed on purpose and documented in
+[`Accessibility.kt`](core/testing/src/main/kotlin/com/thalzeronlabs/shelf/testing/Accessibility.kt): Material 3's bottom
+sheet drag handle is 32 dp wide. It belongs to the compose-bottom-sheets library and is to be fixed there.
 
 ## Performance
 

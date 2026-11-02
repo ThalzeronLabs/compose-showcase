@@ -14,6 +14,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -73,12 +77,25 @@ fun ShelfContent(state: ShelfState, onBookClick: (Book) -> Unit) {
                     "${status.label} · ${books.size}",
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
+                    // A heading, so screen reader users can jump from list to list.
+                    modifier = Modifier.padding(top = 8.dp, bottom = 2.dp).semantics {
+                        heading()
+                        val count = if (books.size == 1) "1 book" else "${books.size} books"
+                        contentDescription = "${status.label}, $count"
+                    },
                 )
             }
             items(books, key = { it.id }) { book ->
-                BookRow(book.title, book.byline, book.coverUrl, onClick = { onBookClick(book) }) {
-                    Badge(status.label, highlighted = status == ReadingStatus.READING)
+                BookRow(
+                    book.title,
+                    book.byline,
+                    book.coverUrl,
+                    onClick = { onBookClick(book) },
+                    onClickLabel = "move or remove",
+                    stateDescription = status.label,
+                    subtitleDescription = book.spokenByline,
+                ) {
+                    Badge(status.label, highlighted = status == ReadingStatus.READING, Modifier.clearAndSetSemantics {})
                 }
             }
         }
