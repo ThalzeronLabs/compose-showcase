@@ -1,7 +1,8 @@
 name: Release
 
 # Builds, signs and attaches the release APK to a GitHub release for every v* tag.
-# It can also be started by hand with a tag name, in which case the tag is created on the current commit.
+# It can also be started by hand with a tag name: a new tag is created on the selected branch's commit, and an
+# existing tag is rebuilt from its own commit (so the APK always matches the tag) and its APK replaced.
 on:
   push:
     tags: ['v*']
@@ -28,6 +29,24 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
+          fetch-depth: 0
+
+      # The notes come from the CHANGELOG of the commit the workflow runs on, so a note can still be added to a
+      # release after its tag was cut.
+      - name: Read the release notes from CHANGELOG.md
+        run: |
+          version="${TAG#v}"
+          awk -v v="$version" '$0 ~ "^## \\[" v "\\]" { on = 1; next } /^## \[/ { on = 0 } on && !/^\[[^]]+\]: /' \
+            CHANGELOG.md > "$RUNNER_TEMP/changes.md"
+
+      - name: Build the tag's own commit if the tag exists
+        run: |
+          if git rev-parse -q --verify "refs/tags/$TAG" > /dev/null; then
+            git checkout -q "refs/tags/$TAG"
+            git submodule update --init --recursive
+            echo "Rebuilding the existing tag $TAG"
+          fi
+          echo "BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
 
       - name: Check the tag
         run: |
@@ -42,21 +61,46 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # A brand-new key for every run. It never leaves the runner and is never stored as a secret,
-      # so anyone can see exactly how the APK was signed. It is a demo key, not a Play upload key.
-      - name: Generate a throwaway demo signing key
+      # The showcase demo key: one fixed key, kept in repository secrets, so each release installs over the
+      # previous one. It is only for these demo builds, never a production or Play Store key. Without the
+      # secrets (a fork, say), a brand-new key is generated for the run and thrown away.
+      - name: Set up the signing key
+        env:
+          DEMO_KEYSTORE_BASE64: ${{ secrets.DEMO_KEYSTORE_BASE64 }}
+          DEMO_KEYSTORE_PASSWORD: ${{ secrets.DEMO_KEYSTORE_PASSWORD }}
+          DEMO_KEY_ALIAS: ${{ secrets.DEMO_KEY_ALIAS }}
+          DEMO_KEY_PASSWORD: ${{ secrets.DEMO_KEY_PASSWORD }}
         run: |
-          pass=$(openssl rand -hex 24)
-          echo "::add-mask::$pass"
-          keytool -genkeypair -keystore "$RUNNER_TEMP/demo.jks" -storetype PKCS12 -alias shelf-demo \
-            -keyalg RSA -keysize 3072 -validity 3650 -storepass "$pass" -keypass "$pass" \
-            -dname "CN=Shelf demo key (not for production), O=Thalzeron Labs"
+          ks="$RUNNER_TEMP/demo.p12"
+          if [ -n "$DEMO_KEYSTORE_BASE64" ]; then
+            printf '%s' "$DEMO_KEYSTORE_BASE64" | base64 -d > "$ks"
+            store_pass="$DEMO_KEYSTORE_PASSWORD"
+            alias="$DEMO_KEY_ALIAS"
+            key_pass="$DEMO_KEY_PASSWORD"
+            mode=fixed
+          else
+            store_pass=$(openssl rand -hex 24)
+            echo "::add-mask::$store_pass"
+            alias=shelf-demo
+            key_pass="$store_pass"
+            keytool -genkeypair -keystore "$ks" -storetype PKCS12 -alias "$alias" \
+              -keyalg RSA -keysize 3072 -validity 3650 -storepass "$store_pass" -keypass "$key_pass" \
+              -dname "CN=Shelf demo key (not for production), O=Thalzeron Labs"
+            mode=throwaway
+          fi
+          # The certificate the APK must be signed with, checked after the build.
+          cert=$(keytool -exportcert -rfc -keystore "$ks" -storepass "$store_pass" -alias "$alias" \
+            | openssl x509 -noout -fingerprint -sha256 | cut -d= -f2 | tr -d : | tr 'A-F' 'a-f')
+          [ -n "$cert" ] || { echo "::error::could not read the signing certificate"; exit 1; }
           {
-            echo "SHELF_KEYSTORE=$RUNNER_TEMP/demo.jks"
-            echo "SHELF_KEYSTORE_PASSWORD=$pass"
-            echo "SHELF_KEY_ALIAS=shelf-demo"
-            echo "SHELF_KEY_PASSWORD=$pass"
+            echo "SHELF_KEYSTORE=$ks"
+            echo "SHELF_KEYSTORE_PASSWORD=$store_pass"
+            echo "SHELF_KEY_ALIAS=$alias"
+            echo "SHELF_KEY_PASSWORD=$key_pass"
+            echo "KEY_CERT_SHA256=$cert"
+            echo "SIGNING=$mode"
           } >> "$GITHUB_ENV"
+          echo "Signing with the $mode key, certificate SHA-256 $cert"
 
       - name: Test and build the release APK (R8)
         run: ./gradlew testDebugUnitTest -Proborazzi.test.verify=true :app:assembleRelease
@@ -68,13 +112,24 @@ jobs:
           apksigner="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)apksigner"
           "$apksigner" verify --print-certs "$apk" > certs.txt
           cat certs.txt
-          grep -q "Shelf demo key" certs.txt || { echo "::error::APK is not signed with the demo key"; exit 1; }
           cert=$(sed -nE 's/.*certificate SHA-256 digest: ([0-9a-f]+).*/\1/p' certs.txt | head -1)
+          [ "$cert" = "$KEY_CERT_SHA256" ] || { echo "::error::APK is not signed with the expected key"; exit 1; }
+          rm -f "$SHELF_KEYSTORE"
           bytes=$(stat -c %s "$apk")
           mib=$(awk "BEGIN { printf \"%.2f\", $bytes / 1048576 }")
           sha=$(sha256sum "$apk" | cut -d' ' -f1)
-          version="${TAG#v}"
-          changes=$(awk -v v="$version" '$0 ~ "^## \\[" v "\\]" { on = 1; next } /^## \[/ { on = 0 } on && !/^\[[^]]+\]: /' CHANGELOG.md)
+          changes=$(cat "$RUNNER_TEMP/changes.md")
+          if [ "$SIGNING" = fixed ]; then
+            signing="**Signed with the showcase demo key.** From 1.1.1 on, every release is signed with this same key,
+          so a new version installs over the previous one. It is a demo key used only for these showcase builds,
+          not a production or Play Store key. Versions up to 1.1.0 were each signed with a one-off key: if one of
+          those is installed, uninstall it once before installing this APK."
+          else
+            signing="**Signed with a one-off demo key.** The key was generated inside this workflow run, used once and
+          thrown away (see \`.github/workflows/release.yml\`). It proves the APK is a normal signed release build, but
+          it is not a production or Play Store key: to install a newer version over an older one, uninstall the old
+          one first."
+          fi
           cat > notes.md <<NOTES
           ${changes:-See CHANGELOG.md.}
 
@@ -83,14 +138,12 @@ jobs:
           | | |
           |---|---|
           | File | \`$apk\` |
+          | Built from | \`$BUILD_SHA\` |
           | Size | $bytes bytes ($mib MiB), minified and shrunk with R8 |
           | SHA-256 | \`$sha\` |
           | Signing certificate SHA-256 | \`$cert\` |
 
-          **Signed with a demo key.** The key was generated inside this workflow run, used once and thrown away
-          (see \`.github/workflows/release.yml\`). It proves the APK is a normal signed release build, but it is
-          not a production or Play Store key, and every release has a different one: to install a newer
-          version over an older one, uninstall the old one first.
+          $signing
 
           Install: download the APK on an Android 8.0+ device and allow installs from your browser or file manager.
           NOTES
@@ -102,5 +155,5 @@ jobs:
             gh release upload "$TAG" "$APK" --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" "$APK" --title "Shelf $TAG" --notes-file notes.md --target "$GITHUB_SHA" --latest
+            gh release create "$TAG" "$APK" --title "Shelf $TAG" --notes-file notes.md --target "$BUILD_SHA" --latest
           fi
