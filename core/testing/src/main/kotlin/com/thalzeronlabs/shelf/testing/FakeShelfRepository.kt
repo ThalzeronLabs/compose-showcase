@@ -1,5 +1,7 @@
 package com.thalzeronlabs.shelf.testing
 
+import androidx.paging.LoadState
+import androidx.paging.LoadStates
 import androidx.paging.PagingData
 import com.thalzeronlabs.shelf.data.ShelfRepository
 import com.thalzeronlabs.shelf.model.Book
@@ -22,10 +24,23 @@ class FakeShelfRepository(var results: List<Book> = emptyList()) : ShelfReposito
 
     val shelf = MutableStateFlow<List<Book>>(emptyList())
 
+    /**
+     * What the network reports for every search, as the real repository's RemoteMediator would: by default the
+     * refresh finished and there is nothing more to load; a [LoadState.Error] plays "offline".
+     */
+    var network: LoadState = LoadState.NotLoading(endOfPaginationReached = true)
+
     override fun search(query: String): Flow<PagingData<Book>> = flow {
         searches += query
         try {
-            emit(PagingData.from(resultsFor[query] ?: results))
+            val done = LoadState.NotLoading(endOfPaginationReached = true)
+            emit(
+                PagingData.from(
+                    resultsFor[query] ?: results,
+                    sourceLoadStates = LoadStates(refresh = done, prepend = done, append = done),
+                    mediatorLoadStates = LoadStates(refresh = network, prepend = done, append = done),
+                ),
+            )
             awaitCancellation()
         } finally {
             cancelled += query

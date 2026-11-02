@@ -5,6 +5,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Added
+
+- Compose interaction tests for both screens, run under Robolectric with the real ViewModels, Paging and bottom
+  sheets: searching and adding a book through the sheet, the empty, error and offline states, and moving and
+  removing books (including cancelling a removal).
+- Tests for `SettingsStore` against a real DataStore file: the default, a choice surviving a restart, and an unknown
+  stored value falling back to the system theme.
+
 ## [1.1.1] - 2026-11-02
 
 Same code as 1.1.0, released again so that the tag matches the APK.

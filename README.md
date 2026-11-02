@@ -161,7 +161,7 @@ classes, so the design system can change without touching the data layer and vic
 ./gradlew :app:recordRoborazziDebug                        # re-record the screenshots after a deliberate UI change
 ```
 
-63 tests, all on the JVM; no emulator or device is needed.
+75 tests, all on the JVM; no emulator or device is needed.
 
 | Suite | Runs on | What it proves |
 |---|---|---|
@@ -175,10 +175,14 @@ classes, so the design system can change without touching the data layer and vic
 | [`SearchViewModelTest`](feature/search/src/test/kotlin/com/thalzeronlabs/shelf/feature/search/SearchViewModelTest.kt) (7) | JVM, Turbine, paging-testing | Debounce collapses typing into one search; short queries never search; queries are trimmed; a new query cancels the previous pager; results and clearing; saving |
 | [`SearchStatusTest`](feature/search/src/test/kotlin/com/thalzeronlabs/shelf/feature/search/SearchStatusTest.kt) (8) | JVM | How Room's and the network's load states become idle, loading, empty, error, results, "refreshing" and "saved on this device" |
 | [`ShelfViewModelTest`](feature/shelf/src/test/kotlin/com/thalzeronlabs/shelf/feature/shelf/ShelfViewModelTest.kt) (2) | JVM, Turbine | Shelf grouping, moving and removing |
+| [`SearchScreenTest`](feature/search/src/test/kotlin/com/thalzeronlabs/shelf/feature/search/SearchScreenTest.kt) (5) | Robolectric, Compose UI test | Driving the real screen, ViewModel, Paging and bottom sheet: one-letter queries keep the hint; typing shows the results with their badges, and picking a list in the sheet saves the book; the empty state; offline with nothing saved shows the error and "Try again"; offline with saved rows shows them under the banner |
+| [`ShelfScreenTest`](feature/shelf/src/test/kotlin/com/thalzeronlabs/shelf/feature/shelf/ShelfScreenTest.kt) (4) | Robolectric, Compose UI test | Tapping through the sheets: moving a book (the sheet never offers its current list); removing asks first, "Cancel" keeps the book and "Remove" empties the shelf |
+| [`SettingsStoreTest`](core/data/src/test/kotlin/com/thalzeronlabs/shelf/data/SettingsStoreTest.kt) (3) | JVM, real DataStore file | The theme follows the system by default; a choice survives a restart; a value this version does not know falls back to the system theme instead of crashing |
 | [`OfflineIndicatorTest`](app/src/test/kotlin/com/thalzeronlabs/shelf/OfflineIndicatorTest.kt) (1) | Robolectric, Compose UI test | The Offline indicator appears and disappears with connectivity |
 | [`ScreenshotTest`](app/src/test/kotlin/com/thalzeronlabs/shelf/screenshots/ScreenshotTest.kt) (7) | Robolectric + Roborazzi | Search, shelf, offline, error and "couldn't load more" screens in dark and light themes match `docs/screenshots` |
 
-Not covered yet: the Compose interaction flows (tapping through the bottom sheets) and `SettingsStore`.
+The interaction tests were checked against deliberate bugs: removing a book without asking, and reading an unknown
+theme value without a fallback, each make them fail.
 
 ## Performance
 
