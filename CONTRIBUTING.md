@@ -25,23 +25,30 @@ Forgot `--recursive`? Run `git submodule update --init`: the bottom sheets come 
 ## Before you open a pull request
 
 ```bash
-./gradlew :app:verifyRoborazziDebug   # every unit test, plus the screenshot comparison (what CI runs)
-./gradlew :app:assembleRelease        # the R8 build must still work
+./gradlew testDebugUnitTest -Proborazzi.test.verify=true   # every module's tests, plus the screenshot comparison (what CI runs)
+./gradlew :app:assembleRelease :benchmark:assembleBenchmarkRelease   # the R8 build and the benchmark module must still build
 ```
 
 - **Changed the UI on purpose?** Re-record the screenshots with `./gradlew :app:recordRoborazziDebug` and commit the
   updated images in `docs/screenshots`. Reviewers look at the image diff on GitHub.
 - **Changed a Room entity?** Bump the database version, commit the new schema JSON that the build writes to
-  `app/schemas`, add a migration (an `AutoMigration` when Room can infer it) and a case in `ShelfMigrationTest`.
+  `core/data/schemas`, add a migration (an `AutoMigration` when Room can infer it) and a case in `ShelfMigrationTest`.
+- **Where does the code go?** Data (Room, network, sync) in `:core:data`, shared composables and the theme in
+  `:core:ui`, a screen and its ViewModel in its `:feature:*` module. Features do not depend on each other.
+- **Changed the start-up path or the main journey?** Regenerate the Baseline Profile with
+  `./gradlew :app:generateBaselineProfile` (or run the *Baseline profile* workflow) and commit
+  `app/src/release/generated/baselineProfiles`.
 - **Added a dependency?** Put the version in `gradle/libs.versions.toml` and say in the PR why it is worth its size;
   the README tracks the release APK size.
-- **New behaviour needs a test.** ViewModels are tested with Turbine and fakes on the plain JVM; anything that touches
-  Room or Android runs under Robolectric. No emulator is needed for any test.
+- **New behaviour needs a test.** ViewModels are tested with Turbine and `FakeShelfRepository` (`:core:testing`) on the
+  plain JVM; anything that touches Room, WorkManager or Android runs under Robolectric. No emulator is needed for any
+  test (only the benchmarks need a device).
 
 ## Code style
 
 - Kotlin official code style (`kotlin.code.style=official`); keep lines under about 120 characters.
-- One source of truth: screens read state from a ViewModel `StateFlow` and send intents back. Keep composables that
+- One source of truth: the UI only observes Room (through the repository); the network only writes into Room.
+  Screens read state from a ViewModel and send intents back. Keep composables that
   render a screen stateless (`SearchContent`, `ShelfContent`) so previews and screenshot tests can use them.
 - Comments explain *why*, not *what*.
 - Code, comments, commits and docs are in English.

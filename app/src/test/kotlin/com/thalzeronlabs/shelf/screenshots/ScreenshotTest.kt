@@ -12,16 +12,22 @@ import coil3.compose.AsyncImagePreviewHandler
 import coil3.compose.LocalAsyncImagePreviewHandler
 import com.github.takahirom.roborazzi.RoborazziOptions
 import com.github.takahirom.roborazzi.captureRoboImage
-import com.thalzeronlabs.shelf.Book
-import com.thalzeronlabs.shelf.ReadingStatus
+import androidx.paging.LoadState
+import androidx.paging.LoadStates
+import androidx.paging.PagingData
+import androidx.paging.compose.collectAsLazyPagingItems
 import com.thalzeronlabs.shelf.ShelfScaffold
 import com.thalzeronlabs.shelf.Tab
-import com.thalzeronlabs.shelf.ThemeMode
-import com.thalzeronlabs.shelf.ui.search.SearchContent
-import com.thalzeronlabs.shelf.ui.search.SearchState
-import com.thalzeronlabs.shelf.ui.shelf.ShelfContent
-import com.thalzeronlabs.shelf.ui.shelf.ShelfState
+import com.thalzeronlabs.shelf.feature.search.NETWORK_ERROR
+import com.thalzeronlabs.shelf.feature.search.SearchContent
+import com.thalzeronlabs.shelf.feature.search.SearchStatus
+import com.thalzeronlabs.shelf.feature.shelf.ShelfContent
+import com.thalzeronlabs.shelf.feature.shelf.ShelfState
+import com.thalzeronlabs.shelf.model.Book
+import com.thalzeronlabs.shelf.model.ReadingStatus
 import com.thalzeronlabs.shelf.ui.theme.ShelfTheme
+import kotlinx.coroutines.flow.flowOf
+import java.io.IOException
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -32,42 +38,63 @@ import org.robolectric.annotation.GraphicsMode
  * images in `docs/screenshots`, which are also the README's screenshots.
  *
  *   ./gradlew :app:recordRoborazziDebug   # update the images after a UI change
- *   ./gradlew :app:verifyRoborazziDebug   # what CI runs: fails if the UI changed unexpectedly
+ *   ./gradlew :app:verifyRoborazziDebug   # part of what CI runs: fails if the UI changed unexpectedly
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w411dp-h891dp-xhdpi")
 class ScreenshotTest {
 
-    @Test fun searchDark() = snap("search_dark", ThemeMode.DARK, Tab.SEARCH) { search(SearchState.Results(searchResults)) }
+    @Test fun searchDark() = snap("search_dark", dark = true, Tab.SEARCH) { search(SearchStatus.Results()) }
 
-    @Test fun shelfDark() = snap("shelf_dark", ThemeMode.DARK, Tab.SHELF) { ShelfContent(shelfState, onBookClick = {}) }
+    @Test fun shelfDark() = snap("shelf_dark", dark = true, Tab.SHELF) { ShelfContent(shelfState, onBookClick = {}) }
 
-    @Test fun searchOfflineDark() = snap("search_offline_dark", ThemeMode.DARK, Tab.SEARCH) {
-        search(SearchState.Results(searchResults, savedAt = 1L))
+    /** Offline: the top bar says so, and the results are the ones Room had (the refresh failed). */
+    @Test fun searchOfflineDark() = snap("search_offline_dark", dark = true, Tab.SEARCH, offline = true) {
+        search(SearchStatus.Results(refreshFailed = true), network = LoadState.Error(IOException("offline")))
     }
 
-    @Test fun searchLight() = snap("search_light", ThemeMode.LIGHT, Tab.SEARCH) { search(SearchState.Results(searchResults)) }
-
-    @Test fun shelfLight() = snap("shelf_light", ThemeMode.LIGHT, Tab.SHELF) { ShelfContent(shelfState, onBookClick = {}) }
-
-    @Test fun searchErrorLight() = snap("search_error_light", ThemeMode.LIGHT, Tab.SEARCH) {
-        search(SearchState.Error("Couldn't reach Open Library. Check your connection."), query = "foundation")
+    /** The connection dropped while the next page was loading: the rows stay, with a retry at the end. */
+    @Test fun searchMoreFailedDark() = snap("search_more_failed_dark", dark = true, Tab.SEARCH, offline = true) {
+        search(SearchStatus.Results(), results = searchResults.take(5), append = LoadState.Error(IOException("offline")))
     }
 
+    @Test fun searchLight() = snap("search_light", dark = false, Tab.SEARCH) { search(SearchStatus.Results()) }
+
+    @Test fun shelfLight() = snap("shelf_light", dark = false, Tab.SHELF) { ShelfContent(shelfState, onBookClick = {}) }
+
+    @Test fun searchErrorLight() = snap("search_error_light", dark = false, Tab.SEARCH, offline = true) {
+        search(SearchStatus.Error(NETWORK_ERROR), query = "foundation", results = emptyList())
+    }
+
+    /** The search screen over a fixed page of results, with the load states a real pager would report. */
     @Composable
-    private fun search(state: SearchState, query: String = "dune") =
-        SearchContent(query, state, onQueryChange = {}, onRetry = {}, onBookClick = {})
+    private fun search(
+        status: SearchStatus,
+        query: String = "dune",
+        results: List<Book> = searchResults,
+        network: LoadState = LoadState.NotLoading(endOfPaginationReached = false),
+        append: LoadState = LoadState.NotLoading(endOfPaginationReached = false),
+    ) {
+        val notLoading = LoadState.NotLoading(endOfPaginationReached = false)
+        val data = PagingData.from(
+            results,
+            sourceLoadStates = LoadStates(refresh = notLoading, prepend = notLoading, append = append),
+            mediatorLoadStates = LoadStates(refresh = network, prepend = notLoading, append = append),
+        )
+        val items = flowOf(data).collectAsLazyPagingItems()
+        SearchContent(query, status, items, onQueryChange = {}, onRetry = {}, onBookClick = {})
+    }
 
-    private fun snap(name: String, theme: ThemeMode, tab: Tab, content: @Composable () -> Unit) =
+    private fun snap(name: String, dark: Boolean, tab: Tab, offline: Boolean = false, content: @Composable () -> Unit) =
         captureRoboImage("$DIR/$name.png", OPTIONS) {
             // Inspection mode makes Coil use the preview handler below instead of the network.
             CompositionLocalProvider(
                 LocalInspectionMode provides true,
                 LocalAsyncImagePreviewHandler provides covers,
             ) {
-                ShelfTheme(theme) {
-                    ShelfScaffold(selected = tab, onSelect = {}, onThemeClick = {}, content = content)
+                ShelfTheme(dark) {
+                    ShelfScaffold(selected = tab, offline = offline, onSelect = {}, onThemeClick = {}, content = content)
                 }
             }
         }

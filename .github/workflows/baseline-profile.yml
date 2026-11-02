@@ -1,0 +1,81 @@
+name: Baseline profile
+
+# Generates the app's Baseline Profile and measures cold start-up with and without it, on a Gradle-managed
+# emulator (Pixel 6, API 34). Results go to the job summary and to the "baseline-profile" artifact; the
+# profile is then committed to app/src/release/generated/baselineProfiles by a maintainer.
+#
+# Emulator timings are noisy and slower than a phone: compare the two modes with each other, and measure on
+# a real device before quoting absolute numbers (see "Performance" in the README).
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'benchmark/**'
+      - '.github/workflows/baseline-profile.yml'
+
+concurrency:
+  group: baseline-profile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  profile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      GMD: >-
+        -Pandroid.testoptions.manageddevices.emulator.gpu=swiftshader_indirect
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      # Runs BaselineProfileGenerator (start-up, search, scroll, shelf) and copies the result into src/release.
+      - name: Generate the Baseline Profile
+        run: ./gradlew :app:generateBaselineProfile $GMD
+
+      # Builds the release app again, now with the new profile, and times 10 cold starts per mode.
+      - name: Measure cold start-up
+        run: >-
+          ./gradlew :benchmark:pixel6Api34BenchmarkReleaseAndroidTest $GMD
+          -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.enabledRules=Macrobenchmark
+          -Pandroid.testInstrumentationRunnerArguments.androidx.benchmark.suppressErrors=EMULATOR
+
+      - name: Write the results to the job summary
+        run: |
+          json=$(find benchmark/build -name '*benchmarkData.json' | head -1)
+          [ -n "$json" ] || { echo "::error::no benchmark results found"; exit 1; }
+          cp "$json" startup-benchmark.json
+          python3 - "$json" >> "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, sys
+          data = json.load(open(sys.argv[1]))
+          build = data.get("context", {}).get("build", {})
+          print("### Cold start-up, `timeToInitialDisplayMs`\n")
+          print(f"Device: {build.get('model', '?')} (API {build.get('version', {}).get('sdk', '?')}), Gradle-managed emulator on GitHub Actions.\n")
+          print("| Benchmark | Runs | Min | Median | Max |")
+          print("|---|---:|---:|---:|---:|")
+          for b in data["benchmarks"]:
+              m = b["metrics"]["timeToInitialDisplayMs"]
+              print(f"| {b['name']} | {len(m['runs'])} | {m['minimum']:.1f} | {m['median']:.1f} | {m['maximum']:.1f} |")
+          PY
+          cat "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: baseline-profile
+          path: |
+            app/src/release/generated/baselineProfiles/
+            startup-benchmark.json
+          if-no-files-found: error

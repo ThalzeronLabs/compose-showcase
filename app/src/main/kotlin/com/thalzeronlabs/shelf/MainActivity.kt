@@ -1,27 +1,15 @@
 package com.thalzeronlabs.shelf
 
-import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
@@ -33,30 +21,34 @@ import androidx.navigation.compose.rememberNavController
 import com.thalzeronlabs.sheets.SheetHost
 import com.thalzeronlabs.sheets.SheetHostState
 import com.thalzeronlabs.sheets.SheetOption
+import com.thalzeronlabs.shelf.data.ConnectivityMonitor
 import com.thalzeronlabs.shelf.data.SettingsStore
-import com.thalzeronlabs.shelf.ui.search.SearchScreen
-import com.thalzeronlabs.shelf.ui.shelf.ShelfScreen
+import com.thalzeronlabs.shelf.feature.search.SearchScreen
+import com.thalzeronlabs.shelf.feature.shelf.ShelfScreen
+import com.thalzeronlabs.shelf.model.ThemeMode
 import com.thalzeronlabs.shelf.ui.theme.ShelfTheme
 import dagger.hilt.android.AndroidEntryPoint
-import dagger.hilt.android.HiltAndroidApp
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-@HiltAndroidApp
-class ShelfApp : Application()
-
 @HiltViewModel
-class AppViewModel @Inject constructor(private val settings: SettingsStore) : ViewModel() {
+class AppViewModel @Inject constructor(
+    private val settings: SettingsStore,
+    connectivity: ConnectivityMonitor,
+) : ViewModel() {
     val themeMode = settings.themeMode.stateIn(viewModelScope, SharingStarted.Eagerly, ThemeMode.SYSTEM)
+
+    /** Drives the "Offline" indicator in the top bar. Starts as online so a cold start never flashes it. */
+    val offline = connectivity.isOnline.map { !it }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch { settings.setThemeMode(mode) }
     }
 }
-
-enum class Tab(val route: String, val label: String) { SEARCH("search", "Search"), SHELF("shelf", "My shelf") }
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -66,14 +58,19 @@ class MainActivity : ComponentActivity() {
         setContent {
             val app: AppViewModel = hiltViewModel()
             val theme by app.themeMode.collectAsStateWithLifecycle()
-            ShelfTheme(theme) { ShelfRoot(onTheme = app::setThemeMode) }
+            val offline by app.offline.collectAsStateWithLifecycle()
+            val dark = when (theme) {
+                ThemeMode.SYSTEM -> isSystemInDarkTheme()
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+            }
+            ShelfTheme(dark) { ShelfRoot(offline, onTheme = app::setThemeMode) }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ShelfRoot(onTheme: (ThemeMode) -> Unit) {
+private fun ShelfRoot(offline: Boolean, onTheme: (ThemeMode) -> Unit) {
     val nav = rememberNavController()
     val sheets = remember { SheetHostState() }
     val scope = rememberCoroutineScope()
@@ -81,6 +78,7 @@ private fun ShelfRoot(onTheme: (ThemeMode) -> Unit) {
 
     ShelfScaffold(
         selected = Tab.entries.firstOrNull { it.route == current } ?: Tab.SEARCH,
+        offline = offline,
         onSelect = { tab ->
             nav.navigate(tab.route) {
                 popUpTo(nav.graph.findStartDestination().id) { saveState = true }
@@ -100,37 +98,4 @@ private fun ShelfRoot(onTheme: (ThemeMode) -> Unit) {
         }
     }
     SheetHost(sheets)
-}
-
-/** The app chrome (top bar, bottom navigation) around a tab's content. Stateless, so screenshot tests can render it. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ShelfScaffold(
-    selected: Tab,
-    onSelect: (Tab) -> Unit,
-    onThemeClick: () -> Unit,
-    content: @Composable () -> Unit,
-) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Shelf", fontWeight = FontWeight.Bold) },
-                actions = { TextButton(onClick = onThemeClick) { Text("Theme") } },
-            )
-        },
-        bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainerLow) {
-                Tab.entries.forEach { tab ->
-                    NavigationBarItem(
-                        selected = tab == selected,
-                        onClick = { onSelect(tab) },
-                        icon = { Text(if (tab == Tab.SEARCH) "⌕" else "▤", style = MaterialTheme.typography.titleLarge) },
-                        label = { Text(tab.label) },
-                    )
-                }
-            }
-        },
-    ) { padding ->
-        Column(Modifier.padding(padding)) { content() }
-    }
 }
