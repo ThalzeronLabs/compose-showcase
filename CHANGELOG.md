@@ -5,6 +5,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-02
+
+Same code as 1.1.0, released again so that the tag matches the APK.
+
+### Fixed
+
+- The `v1.1.0` tag points at the merge of #8, one commit before the app's Baseline Profile was added (#9), while the
+  APK attached to the 1.1.0 release was built after it. 1.1.1 is that code plus the profile, with the tag and the APK
+  built from the same commit.
+
 ## [1.1.0] - 2026-11-02
 
 Offline-first, paging, background sync and a modular build.
@@ -51,6 +61,7 @@ First public release.
 - A release workflow that builds the R8-minified APK, signs it with a throwaway demo key and attaches it to the GitHub release for every `v*` tag.
 - `CONTRIBUTING.md`, issue and pull request templates.
 
-[Unreleased]: https://github.com/ThalzeronLabs/compose-showcase/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/ThalzeronLabs/compose-showcase/compare/v1.1.1...HEAD
+[1.1.1]: https://github.com/ThalzeronLabs/compose-showcase/compare/v1.1.0...v1.1.1
 [1.1.0]: https://github.com/ThalzeronLabs/compose-showcase/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/ThalzeronLabs/compose-showcase/releases/tag/v1.0.0
