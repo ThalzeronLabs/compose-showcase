@@ -259,8 +259,13 @@ Requires JDK 21 (Robolectric needs it for the Android 16 runtime used by the tes
 ## Releases
 
 Pushing a `vX.Y.Z` tag runs the [release workflow](.github/workflows/release.yml): it runs the tests, builds the R8
-APK, signs it with a **demo key generated inside that workflow run** (never stored, different for every release, not
-a Play Store key), verifies the signature and attaches the APK to the GitHub release with its size and checksums.
+APK from the tag's commit, signs it, checks that the APK carries the expected certificate and attaches it to the
+GitHub release with its size, checksums and the commit it was built from.
+
+Since 1.1.1 the APK is signed with a **fixed showcase demo key** kept in the repository's secrets, so each release
+installs over the previous one. It is used only for these demo builds and is not a production or Play Store key.
+Releases up to 1.1.0 were each signed with a one-off key, so uninstall one of those once before installing a newer
+APK. Without the secrets (in a fork, for example) the workflow generates a one-off key for the run and throws it away.
 See [`CHANGELOG.md`](CHANGELOG.md) for what changed.
 
 ## Contributing

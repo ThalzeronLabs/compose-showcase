@@ -15,6 +15,12 @@ Same code as 1.1.0, released again so that the tag matches the APK.
   APK attached to the 1.1.0 release was built after it. 1.1.1 is that code plus the profile, with the tag and the APK
   built from the same commit.
 
+### Changed
+
+- Releases are now signed with one fixed showcase demo key instead of a new one-off key each time, so from 1.1.1 on
+  each version installs over the previous one. If 1.1.0 or older is installed, uninstall it once first. The release
+  workflow also rebuilds an existing tag from that tag's own commit, so the APK always matches its tag.
+
 ## [1.1.0] - 2026-11-02
 
 Offline-first, paging, background sync and a modular build.
