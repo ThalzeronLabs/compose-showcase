@@ -59,7 +59,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Test and build the release APK (R8)
-        run: ./gradlew :app:verifyRoborazziDebug :app:assembleRelease
+        run: ./gradlew testDebugUnitTest -Proborazzi.test.verify=true :app:assembleRelease
 
       - name: Verify the signature and write the release notes
         run: |

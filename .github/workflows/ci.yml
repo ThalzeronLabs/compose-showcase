@@ -21,19 +21,22 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
-      # Runs every unit test (JVM + Robolectric) and compares the screens with docs/screenshots.
-      - name: Unit, Room and screenshot tests
-        run: ./gradlew :app:verifyRoborazziDebug
+      # Every module's unit tests (JVM + Robolectric); the screenshot tests compare against docs/screenshots.
+      - name: Unit, Room, WorkManager and screenshot tests
+        run: ./gradlew testDebugUnitTest -Proborazzi.test.verify=true
 
-      - name: Upload screenshot diffs
+      - name: Upload test reports and screenshot diffs
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshot-diffs
-          path: app/build/outputs/roborazzi
+          name: test-reports
+          path: |
+            **/build/reports/tests/
+            app/build/outputs/roborazzi
 
-      - name: Build the release APK (R8)
-        run: ./gradlew :app:assembleRelease
+      # The benchmark module only runs on a device, but it must keep compiling against the app.
+      - name: Build the release APK (R8) and the benchmark module
+        run: ./gradlew :app:assembleRelease :benchmark:assembleBenchmarkRelease
 
       - name: Report the APK size
         run: |
