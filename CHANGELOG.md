@@ -21,6 +21,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ### Fixed
 
+- A flaky repository test that turned `main` red: the in-memory test database now runs Room's queries,
+  transactions and invalidation on the calling thread, so a Paging snapshot can no longer be taken before Room
+  reloads the results (it failed 15 times in 200 runs before, 0 in 200 after).
+
+### Fixed
+
 - Secondary text in the light theme (authors, years, hints) had a contrast of 4.47:1, below WCAG AA; it is now
   at least 5.3:1.
 
