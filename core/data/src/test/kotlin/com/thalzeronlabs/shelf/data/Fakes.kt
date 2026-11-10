@@ -73,9 +73,19 @@ internal fun docs(count: Int, prefix: String = "", title: String = "Dune") = (1.
     DocDto("/works/OL$prefix${n}W", "$title $n", listOf("Frank Herbert"), 1965 + n, n.toLong())
 }
 
+/**
+ * An in-memory database whose queries, transactions and invalidation run on the calling thread.
+ *
+ * With Room's default background executors, the "table changed" notification that makes a PagingSource reload
+ * runs on a thread `runTest` does not know about. `asSnapshot()` could then return while that reload was still
+ * pending, and the search came back empty (about 1 run in 13). Running Room on the caller makes every write's
+ * invalidation part of the coroutine that wrote it, so the snapshot always sees it.
+ */
 internal fun inMemoryDatabase(): ShelfDatabase =
     Room.inMemoryDatabaseBuilder(ApplicationProvider.getApplicationContext(), ShelfDatabase::class.java)
         .allowMainThreadQueries()
+        .setQueryExecutor(Runnable::run)
+        .setTransactionExecutor(Runnable::run)
         .build()
 
 /** A clock the test moves by hand. */
