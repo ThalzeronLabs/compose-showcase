@@ -293,6 +293,10 @@ Releases up to 1.1.0 were each signed with a one-off key, so uninstall one of th
 APK. Without the secrets (in a fork, for example) the workflow generates a one-off key for the run and throws it away.
 See [`CHANGELOG.md`](CHANGELOG.md) for what changed.
 
+## How I build this
+
+I use AI assistance (Claude) while I build this project: for drafting, exploring options and writing tests. I review every change myself, each one lands through a pull request with tests, and CI must pass before anything is merged. I'm responsible for every line.
+
 ## Contributing
 
 Issues labelled [`good first issue`](https://github.com/ThalzeronLabs/compose-showcase/labels/good%20first%20issue)
