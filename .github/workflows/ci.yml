@@ -38,6 +38,13 @@ jobs:
       - name: Build the release APK (R8) and the benchmark module
         run: ./gradlew :app:assembleRelease :benchmark:assembleBenchmarkRelease
 
+      - name: The third-party notices are inside the build
+        run: |
+          for f in app/build/outputs/apk/release/app-release.apk; do
+            unzip -l "$f" | grep -q "assets/THIRD-PARTY-NOTICES.txt" || { echo "::error::$f has no assets/THIRD-PARTY-NOTICES.txt"; exit 1; }
+            echo "ok: $f"
+          done
+
       - name: Report the APK size
         run: |
           apk=app/build/outputs/apk/release/app-release.apk

@@ -152,8 +152,8 @@ jobs:
       - name: Publish the GitHub release
         run: |
           if gh release view "$TAG" > /dev/null 2>&1; then
-            gh release upload "$TAG" "$APK" --clobber
+            gh release upload "$TAG" "$APK" THIRD-PARTY-NOTICES.txt --clobber
             gh release edit "$TAG" --notes-file notes.md
           else
-            gh release create "$TAG" "$APK" --title "Shelf $TAG" --notes-file notes.md --target "$BUILD_SHA" --latest
+            gh release create "$TAG" "$APK" THIRD-PARTY-NOTICES.txt --title "Shelf $TAG" --notes-file notes.md --target "$BUILD_SHA" --latest
           fi
