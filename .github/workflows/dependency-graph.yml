@@ -29,7 +29,10 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      # Only what ships in the release APK: the release runtime classpath of every module.
+      # Only what ships in the release APK: the release runtime classpath of every module, except the ones that never
+      # reach a user. :core:testing only helps the unit tests; :benchmark only runs on a test device. Modules are
+      # excluded by name, so a new published module is covered without anyone having to remember it.
       - uses: gradle/actions/dependency-submission@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           dependency-graph-include-configurations: '.*[Rr]eleaseRuntimeClasspath'
+          dependency-graph-exclude-projects: ':core:testing|:benchmark'
